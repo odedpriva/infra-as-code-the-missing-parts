@@ -1,0 +1,58 @@
+image:
+  name: hashicorp/terraform:0.11.14
+  entrypoint:
+    - '/usr/bin/env'
+    - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+before_script:
+  - terraform --version
+  - terraform init
+  
+stages:
+  - lint
+  - validate
+  - conftest
+  - terratest
+  - plan-wait-before-apply
+  - apply
+  - acceptance
+
+validate:
+  stage: validate
+  script:
+    - terraform validate
+
+conftest:
+  stage: conftest
+  script:
+    - cat show.json | conftest test -
+
+terratest:
+  stage: terratest
+  script:
+    - go test
+
+plan-wait-before-apply:
+  stage: plan-wait-before-apply
+  script:
+    - terraform plan -out planfile.tfplan
+  dependencies:
+    - validate
+    - conftest
+    - terratest
+  artifacts:
+    paths:
+    - planfile.tfplan
+
+apply:
+  stage: apply
+  script:
+    - terraform apply -input=false planfile.tfplan
+  dependencies:
+    - plan
+  when: manual
+
+acceptance:
+  stage: acceptance
+  script:
+    - gauge run
